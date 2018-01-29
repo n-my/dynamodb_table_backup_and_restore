@@ -1,0 +1,183 @@
+{
+  "StartAt": "Backup origin table",
+  "States": {
+    "Backup origin table": {
+      "Type": "Task",
+      "Resource": "${backup_table_fn_arn}",
+      "ResultPath" : "$.backupArn",
+      "Next": "Wait while backing up origin table",
+      "Catch": [ {
+        "ErrorEquals": [ "States.ALL" ],
+        "ResultPath": "$.error-info.Cause",
+        "Next": "ExecutionFailed"
+      } ]
+    },
+    "Wait while backing up origin table": {
+      "Type": "Wait",
+      "Seconds": 60,
+      "Next": "Get backup status"
+    },
+    "Get backup status": {
+      "Type": "Task",
+      "Resource": "${get_backup_status_fn_arn}",
+      "ResultPath" : "$.backupStatus",
+      "Next": "Is backup available?",
+      "Retry": [ {
+        "ErrorEquals": [ "States.ALL" ],
+        "IntervalSeconds": 5,
+        "BackoffRate": 2.0,
+        "MaxAttempts": 3
+      } ],
+     "Catch": [ {
+        "ErrorEquals": [ "States.ALL" ],
+        "ResultPath": "$.error-info",
+        "Next": "ExecutionFailed"
+     } ]
+    },
+    "Is backup available?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.backupStatus",
+          "StringEquals": "CREATING",
+          "Next": "Wait while backing up origin table"
+        },
+        {
+          "Variable": "$.backupStatus",
+          "StringEquals": "AVAILABLE",
+          "Next": "Get target table status"
+        }
+      ],
+      "Default": "ExecutionFailed"
+    },
+    "Get target table status": {
+      "Type": "Task",
+      "Resource": "${get_table_status_fn_arn}",
+      "ResultPath" : "$.targetTableStatus",
+      "Next": "Does the target table exist?",
+      "Retry": [ {
+        "ErrorEquals": [ "States.ALL" ],
+        "IntervalSeconds": 5,
+        "BackoffRate": 2.0,
+        "MaxAttempts": 3
+      } ],
+     "Catch": [ {
+        "ErrorEquals": [ "States.ALL" ],
+        "ResultPath": "$.error-info",
+        "Next": "ExecutionFailed"
+     } ]
+    },
+    "Does the target table exist?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.targetTableStatus",
+          "StringEquals": "NONE",
+          "Next": "Restore backup to target table"
+        },
+        {
+          "Variable": "$.targetTableStatus",
+          "StringEquals": "DELETING",
+          "Next": "Wait while deleting target table"
+        },
+        {
+          "Or": [
+            {
+              "Variable": "$.targetTableStatus",
+              "StringEquals": "CREATING"
+            },
+            {
+              "Variable": "$.targetTableStatus",
+              "StringEquals": "UPDATING"
+            },
+            {
+              "Variable": "$.targetTableStatus",
+              "StringEquals": "ACTIVE"
+            }
+          ],
+          "Next": "Delete target table"
+        }
+      ],
+      "Default": "ExecutionFailed"
+    },
+    "Delete target table": {
+      "Type": "Task",
+      "Resource": "${delete_table_fn_arn}",
+      "ResultPath" : "$.targetTableStatus",
+      "Next": "Wait while deleting target table",
+      "Catch": [ {
+        "ErrorEquals": [ "States.ALL" ],
+        "ResultPath": "$.error-info",
+        "Next": "ExecutionFailed"
+      } ]
+    },
+    "Wait while deleting target table": {
+      "Type": "Wait",
+      "Seconds": 60,
+      "Next": "Get target table status"
+    },
+    "Restore backup to target table": {
+      "Type": "Task",
+      "Resource": "${restore_table_fn_arn}",
+      "ResultPath" : "$.targetTableStatus",
+      "Next": "Wait while restoring backup",
+      "Catch": [ {
+        "ErrorEquals": [ "States.ALL" ],
+        "ResultPath": "$.error-info",
+        "Next": "ExecutionFailed"
+      } ]
+    },
+    "Wait while restoring backup": {
+      "Type": "Wait",
+      "Seconds": 240,
+      "Next": "Get target table status v2"
+    },
+    "Get target table status v2": {
+      "Type": "Task",
+      "Resource": "${get_table_status_fn_arn}",
+      "ResultPath" : "$.targetTableStatus",
+      "Next": "Is target table active?",
+      "Retry": [ {
+        "ErrorEquals": [ "States.ALL" ],
+        "IntervalSeconds": 5,
+        "BackoffRate": 2.0,
+        "MaxAttempts": 3
+      } ],
+     "Catch": [ {
+        "ErrorEquals": [ "States.ALL" ],
+        "ResultPath": "$.error-info",
+        "Next": "ExecutionFailed"
+     } ]
+    },
+    "Is target table active?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.targetTableStatus",
+          "StringEquals": "CREATING",
+          "Next": "Wait while restoring backup"
+        },
+        {
+          "Variable": "$.targetTableStatus",
+          "StringEquals": "ACTIVE",
+          "Next": "Update table capacity"
+        }
+      ],
+      "Default": "ExecutionFailed"
+    },
+    "Update table capacity": {
+      "Type": "Task",
+      "Resource": "${update_table_capacity_fn_arn}",
+      "ResultPath" : "$.targetTableStatus",
+      "End": true,
+      "Catch": [ {
+        "ErrorEquals": [ "States.ALL" ],
+        "ResultPath": "$.error-info",
+        "Next": "ExecutionFailed"
+      } ]
+    },
+    "ExecutionFailed": {
+      "Type": "Fail",
+      "Cause": "One step on the execution failed"    }
+  }
+}
