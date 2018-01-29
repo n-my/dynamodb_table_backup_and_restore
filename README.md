@@ -8,7 +8,7 @@ The worklow has been implemented in a Step Functions state machine that calls La
 
 ## Use case
 
-My use case was the followig : backing up a production table and then restoring it in a devlopment environment with less capacity.
+My use case was : backing up a production table and then restoring it in a development environment with less capacity.
 
 ## The worflow
 
