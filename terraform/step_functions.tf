@@ -35,13 +35,13 @@ resource "aws_iam_role" "sfn" {
 EOF
 }
 
-resource "aws_iam_role_policy_attachment" "test-attach" {
+resource "aws_iam_role_policy_attachment" "sfn_lambda_invoke_functions" {
     role       = "${aws_iam_role.sfn.name}"
     policy_arn = "${aws_iam_policy.lambda_invoke_functions.arn}"
 }
 
 data "template_file" "sfn_state_machine" {
-  template = "${file("ddb_backup_restore_table.json")}"
+  template = "${file("templates/sfn_state_machine.json")}"
   vars {
     backup_table_fn_arn          = "${module.backup_table.function_arn}"
     get_backup_status_fn_arn     = "${module.get_backup_status.function_arn}"
